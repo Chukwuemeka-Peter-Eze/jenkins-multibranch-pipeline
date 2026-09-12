@@ -1,85 +1,56 @@
 # Troubleshooting Guide
 
+## Table of Contents
+
+* [Branch Not Discovered](#branch-not-discovered)
+* [Webhook Does Not Trigger Pipeline](#webhook-does-not-trigger-pipeline)
+* [Git Authentication Failure](#git-authentication-failure)
+* [Maven Version Update Fails](#maven-version-update-fails)
+* [Docker Image Has Wrong Version](#docker-image-has-wrong-version)
+* [Jenkins Commit Triggers Pipeline Again](#jenkins-commit-triggers-pipeline-again)
+
+---
+
 ## Branch Not Discovered
 
-### Possible Causes
+**Possible causes:** repository credentials, branch discovery configuration, repository permissions, Jenkins indexing, or an incorrect repository URL.
 
-* Repository credentials
-* Branch discovery configuration
-* Repository permissions
-* Jenkins indexing
-* Incorrect repository URL
-
-### Investigation
-
-Check Jenkins indexing logs and repository accessibility.
+**Investigation:** check Jenkins indexing logs and repository accessibility.
 
 ---
 
 ## Webhook Does Not Trigger Pipeline
 
-### Possible Causes
+**Possible causes:** incorrect endpoint, Jenkins not reachable, incorrect event type, an authentication issue, or a Jenkins configuration issue.
 
-* Incorrect endpoint
-* Jenkins not reachable
-* Incorrect event
-* Authentication issue
-* Jenkins configuration issue
-
-### Investigation
-
-Check webhook delivery information and Jenkins logs.
+**Investigation:** check webhook delivery information and Jenkins logs.
 
 ---
 
 ## Git Authentication Failure
 
-Check:
-
-* Credential ID
-* Credential type
-* Repository permissions
-* Branch permissions
-* Remote URL
+Check the credential ID, credential type, repository permissions, branch permissions, and the remote URL.
 
 ---
 
 ## Maven Version Update Fails
 
-Check:
-
-* Maven installation
-* Project configuration
-* Version expression
-* Plugin configuration
-* Working tree state
+Check the Maven installation, project configuration, version expression, plugin configuration, and working tree state.
 
 ---
 
 ## Docker Image Has Wrong Version
 
-Check:
-
-* Application version
-* Docker build arguments
-* Dockerfile
-* Image tagging logic
-* Pipeline environment variables
+Check the application version, Docker build arguments, Dockerfile, image tagging logic, and pipeline environment variables.
 
 ---
 
 ## Jenkins Commit Triggers Pipeline Again
 
-### Problem
+**Problem:** the pipeline modifies the repository and pushes a commit, which creates another webhook event.
 
-The pipeline modifies the repository and pushes a commit, which creates another webhook event.
+**Investigation:** determine whether the pipeline can identify its own generated commit.
 
-### Investigation
-
-Determine whether the pipeline can identify its own generated commit.
-
-### Resolution
-
-Implement an explicit mechanism to ignore Jenkins-generated version commits.
+**Resolution:** implement an explicit mechanism to ignore Jenkins-generated version commits.
 
 The exact implementation should be documented after the hands-on configuration.

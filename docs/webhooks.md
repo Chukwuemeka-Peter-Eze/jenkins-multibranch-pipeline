@@ -1,8 +1,20 @@
 # Jenkins Webhooks
 
+## Table of Contents
+
+* [Purpose](#purpose)
+* [Workflow](#workflow)
+* [Configuration](#configuration)
+* [Evidence](#evidence)
+* [Validation](#validation)
+
+---
+
 ## Purpose
 
 Webhooks allow the source-control platform to notify Jenkins when repository activity occurs.
+
+---
 
 ## Workflow
 
@@ -18,6 +30,8 @@ Multibranch Pipeline
 Branch Build
 ```
 
+---
+
 ## Configuration
 
 Document:
@@ -30,17 +44,21 @@ Document:
 
 > Do not publish webhook secrets.
 
+---
+
 ## Evidence
 
 ![Webhook Configuration](../media/screenshots/webhook.png)
 
 ![Webhook Triggered Build](../media/screenshots/webhook-build.png)
 
+---
+
 ## Validation
 
-* [ ] Webhook configured
-* [ ] Correct event selected
-* [ ] Jenkins receives event
-* [ ] Appropriate branch identified
-* [ ] Pipeline starts
-* [ ] Pipeline completes successfully
+* [ ] Webhook configured.
+* [ ] Correct event selected.
+* [ ] Jenkins receives the event.
+* [ ] Appropriate branch identified.
+* [ ] Pipeline starts.
+* [ ] Pipeline completes successfully.

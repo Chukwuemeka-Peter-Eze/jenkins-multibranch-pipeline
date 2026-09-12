@@ -1,8 +1,21 @@
 # Application Versioning
 
+## Table of Contents
+
+* [Purpose](#purpose)
+* [Versioning Flow](#versioning-flow)
+* [Local Version Increment](#local-version-increment)
+* [Pipeline Version Increment](#pipeline-version-increment)
+* [Docker Alignment](#docker-alignment)
+* [Evidence](#evidence)
+
+---
+
 ## Purpose
 
 Application versioning establishes an explicit identity for application releases and associated artifacts.
+
+---
 
 ## Versioning Flow
 
@@ -18,19 +31,25 @@ Docker Image
 Git Commit
 ```
 
+---
+
 ## Local Version Increment
 
 The initial versioning exercise includes incrementing the application version using the build tooling.
 
+---
+
 ## Pipeline Version Increment
 
-The pipeline can automate version changes as part of CI/CD execution.
+The pipeline can automate version changes as part of CI/CD execution. The project checklist specifically identifies both local Maven version incrementing and version incrementing within the Jenkins Pipeline itself.
 
-The project checklist specifically identifies both local Maven version incrementing and version incrementing within the Jenkins Pipeline.
+---
 
 ## Docker Alignment
 
-The Dockerfile should be adjusted where necessary so that the resulting container artifact corresponds appropriately with the application version.
+The Dockerfile should be adjusted where necessary so the resulting container artifact corresponds appropriately with the application version.
+
+---
 
 ## Evidence
 

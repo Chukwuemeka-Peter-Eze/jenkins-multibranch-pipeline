@@ -1,6 +1,6 @@
-# Jenkins Multibranch Pipeline - Commands Reference
+# Jenkins Multibranch Pipeline: Commands Reference
 
-> Commands used for repository management, Jenkins administration, application versioning, Docker image operations, and Git automation.
+Commands used for repository management, Jenkins administration, application versioning, Docker image operations, and Git automation.
 
 ---
 
@@ -13,188 +13,75 @@
 * [Version Inspection](#version-inspection)
 * [Git Version Commit](#git-version-commit)
 * [Validation](#validation)
+* [Security Note](#security-note)
 
 ---
 
-# Git
-
-Clone the repository:
+## Git
 
 ```bash
-git clone https://github.com/Chukwuemeka-Peter-Eze/Jenkins-multibranch-pipeline.git
-```
+git clone https://github.com/Chukwuemeka-Peter-Eze/jenkins-multibranch-pipeline.git
+cd jenkins-multibranch-pipeline
 
-Enter the repository:
-
-```bash
-cd Jenkins-multibranch-pipeline
-```
-
-Check status:
-
-```bash
-git status
-```
-
-List branches:
-
-```bash
-git branch -a
-```
-
-Create a branch:
-
-```bash
-git checkout -b feature/<branch-name>
-```
-
-Switch branches:
-
-```bash
-git checkout <branch-name>
-```
-
-Pull changes:
-
-```bash
-git pull origin <branch-name>
-```
-
-Stage changes:
-
-```bash
-git add .
-```
-
-Commit:
-
-```bash
-git commit -m "feat: update application version"
-```
-
-Push:
-
-```bash
-git push origin <branch-name>
+git status                          # Check status
+git branch -a                       # List branches
+git checkout -b feature/<branch-name>  # Create a branch
+git checkout <branch-name>          # Switch branches
+git pull origin <branch-name>       # Pull changes
+git add .                           # Stage changes
+git commit -m "feat: update application version"   # Commit
+git push origin <branch-name>       # Push
 ```
 
 ---
 
-# Jenkins Container
-
-List Jenkins containers:
+## Jenkins Container
 
 ```bash
-docker ps
-```
-
-Inspect Jenkins:
-
-```bash
-docker inspect <jenkins-container>
-```
-
-Open a shell:
-
-```bash
-docker exec -it <jenkins-container> bash
-```
-
-Open a root shell:
-
-```bash
-docker exec -u 0 -it <jenkins-container> bash
+docker ps                                    # List Jenkins containers
+docker inspect <jenkins-container>           # Inspect Jenkins
+docker exec -it <jenkins-container> bash     # Open a shell
+docker exec -u 0 -it <jenkins-container> bash  # Open a root shell
 ```
 
 ---
 
-# Docker
-
-List images:
+## Docker
 
 ```bash
-docker images
-```
-
-Build an image:
-
-```bash
-docker build -t <image-name>:<version> .
-```
-
-List running containers:
-
-```bash
-docker ps
-```
-
-Inspect an image:
-
-```bash
-docker inspect <image-name>:<version>
+docker images                             # List images
+docker build -t <image-name>:<version> .  # Build an image
+docker ps                                 # List running containers
+docker inspect <image-name>:<version>     # Inspect an image
 ```
 
 ---
 
-# Maven
-
-Display Maven version:
+## Maven
 
 ```bash
-mvn -version
-```
-
-Build the application:
-
-```bash
-mvn clean package
-```
-
-Run tests:
-
-```bash
-mvn test
-```
-
-Inspect the project version:
-
-```bash
-mvn help:evaluate -Dexpression=project.version -q -DforceStdout
+mvn -version         # Display Maven version
+mvn clean package    # Build the application
+mvn test             # Run tests
+mvn help:evaluate -Dexpression=project.version -q -DforceStdout   # Inspect the project version
 ```
 
 > Verify the exact command against the application implementation before using it in final documentation.
 
 ---
 
-# Version Inspection
-
-Check the current Git working tree:
+## Version Inspection
 
 ```bash
-git status
-```
-
-Inspect recent commits:
-
-```bash
-git log --oneline -10
-```
-
-Inspect changes:
-
-```bash
-git diff
-```
-
-Check the application version:
-
-```bash
-mvn help:evaluate -Dexpression=project.version -q -DforceStdout
+git status                                  # Current working tree
+git log --oneline -10                       # Recent commits
+git diff                                     # Inspect changes
+mvn help:evaluate -Dexpression=project.version -q -DforceStdout   # Application version
 ```
 
 ---
 
-# Git Version Commit
+## Git Version Commit
 
 Conceptual workflow:
 
@@ -224,9 +111,7 @@ The final command sequence must reflect the implementation actually used.
 
 ---
 
-# Validation
-
-Verify:
+## Validation
 
 ```text
 Branch
@@ -248,13 +133,4 @@ Trigger filtering
 
 ## Security Note
 
-Never place:
-
-* passwords
-* access tokens
-* private keys
-* webhook secrets
-
-inside this file.
-
-Use placeholders for sensitive values.
+Never place passwords, access tokens, private keys, or webhook secrets inside this file. Use placeholders for sensitive values.

@@ -1,16 +1,19 @@
 # Jenkins Credentials
 
+## Table of Contents
+
+* [Purpose](#purpose)
+* [Security Principle](#security-principle)
+* [Configuration Evidence](#configuration-evidence)
+* [Validation](#validation)
+
+---
+
 ## Purpose
 
-Jenkins Credentials provide controlled access to sensitive information required by automated pipelines.
+Jenkins Credentials provide controlled access to sensitive information required by automated pipelines. Typical credentials may include username/password pairs, SSH keys, access tokens, registry credentials, and repository credentials.
 
-Typical credentials may include:
-
-* Username/password
-* SSH keys
-* Access tokens
-* Registry credentials
-* Repository credentials
+---
 
 ## Security Principle
 
@@ -29,17 +32,19 @@ Jenkins Credentials Store
 Authenticated operation
 ```
 
+---
+
 ## Configuration Evidence
 
 ![Jenkins Credentials Configuration](../media/screenshots/credentials.png)
 
-> Placeholder — replace with a screenshot that contains no exposed secrets.
+---
 
 ## Validation
 
-* [ ] Credential created
-* [ ] Correct credential type selected
-* [ ] Correct scope selected
-* [ ] Pipeline references credential
-* [ ] Authentication succeeds
-* [ ] Secret does not appear in logs
+* [ ] Credential created.
+* [ ] Correct credential type selected.
+* [ ] Correct scope selected.
+* [ ] Pipeline references the credential.
+* [ ] Authentication succeeds.
+* [ ] Secret does not appear in logs.
