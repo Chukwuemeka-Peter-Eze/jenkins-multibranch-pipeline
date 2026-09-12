@@ -1,12 +1,12 @@
 # Jenkins Multibranch Pipeline
 
-> Automated branch-aware CI/CD workflows using Jenkins Multibranch Pipelines, secure credentials, Git webhooks, and automated application version management.
+> Branch-aware CI/CD workflows using Jenkins Multibranch Pipelines, secure credentials, Git webhooks, and automated application version management.
 
 [![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-red?logo=jenkins&logoColor=white)](#)
 [![Pipeline](https://img.shields.io/badge/Jenkins-Pipeline-blue?logo=jenkins&logoColor=white)](#)
 [![Git](https://img.shields.io/badge/Git-Version%20Control-orange?logo=git&logoColor=white)](#)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-Automation-green)](#)
-[![Documentation](https://img.shields.io/badge/Documentation-PECOS-informational)](#)
+[![License](https://img.shields.io/badge/License-MIT-green)](#)
 
 ---
 
@@ -31,8 +31,6 @@
 * [Technology Stack](#technology-stack)
 * [Repository Structure](#repository-structure)
 * [Implementation](#implementation)
-* [Validation](#validation)
-* [Evidence](#evidence)
 * [Security Considerations](#security-considerations)
 * [Troubleshooting](#troubleshooting)
 * [Engineering Decisions](#engineering-decisions)
@@ -40,16 +38,15 @@
 * [Future Improvements](#future-improvements)
 * [Related Projects](#related-projects)
 * [Connect](#connect)
-* [Project Status](#project-status)
 * [License](#license)
 
 ---
 
 ## Overview
 
-Modern application repositories commonly contain multiple branches representing different stages of development and delivery. A CI/CD system must be capable of discovering these branches, executing the appropriate pipeline logic, responding to repository changes, securely accessing required resources, and managing application versions consistently.
+Modern application repositories commonly contain multiple branches representing different stages of development and delivery. A CI/CD system needs to discover these branches, execute the appropriate pipeline logic, respond to repository changes, securely access required resources, and manage application versions consistently.
 
-This project demonstrates a Jenkins-based approach using Multibranch Pipelines, branch-aware Jenkinsfiles, Jenkins Credentials, Git webhooks, automated application versioning, Docker image version alignment, automated commits from Jenkins, and protection against recursive pipeline execution.
+This project implements a Jenkins-based approach using Multibranch Pipelines, branch-aware Jenkinsfiles, Jenkins Credentials, Git webhooks, automated application versioning, Docker image version alignment, automated commits from Jenkins, and protection against recursive pipeline execution.
 
 The result is a branch-aware CI/CD workflow that connects source-control activity with automated build and delivery processes.
 
@@ -57,7 +54,7 @@ The result is a branch-aware CI/CD workflow that connects source-control activit
 
 ## Engineering Problem
 
-A single static Jenkins pipeline becomes increasingly difficult to manage when a repository contains multiple active branches. Different branches may require different behavior:
+A single static Jenkins pipeline becomes increasingly difficult to manage when a repository contains multiple active branches. Different branches require different behavior:
 
 ```text
 feature/*
@@ -153,8 +150,6 @@ Jenkins Multibranch Pipeline
 ## Architecture
 
 ![Jenkins Multibranch Pipeline Architecture](./media/diagrams/jenkins-multibranch-architecture.png)
-
-> **Architecture placeholder:** replace this image with the final diagram after implementation is complete and validated.
 
 ### Conceptual Architecture
 
@@ -259,8 +254,6 @@ Jenkins discovers the branches and evaluates the pipeline definition associated 
 
 ![Multibranch Pipeline](./media/screenshots/multibranch-pipeline.png)
 
-> Screenshot placeholder.
-
 ---
 
 ## Branch-Based Pipeline Logic
@@ -278,11 +271,7 @@ if feature/*
     → validation workflow
 ```
 
-The exact branch names and behavior should reflect the implementation actually completed.
-
 ![Branch-Based Pipeline Logic](./media/screenshots/branch-based-logic.png)
-
-> Screenshot placeholder.
 
 ---
 
@@ -290,7 +279,7 @@ The exact branch names and behavior should reflect the implementation actually c
 
 CI/CD pipelines frequently require authentication to external systems: source-control repositories, container registries, artifact repositories, cloud platforms, and deployment targets.
 
-Credentials should never be hard-coded into Jenkinsfiles. Instead, Jenkins Credentials provide controlled access to sensitive values.
+Credentials are never hard-coded into Jenkinsfiles. Instead, Jenkins Credentials provide controlled access to sensitive values.
 
 ```text
 Jenkinsfile
@@ -304,8 +293,6 @@ Authenticated operation
 ```
 
 ![Jenkins Credentials](./media/screenshots/jenkins-credentials.png)
-
-> Screenshot placeholder. Never commit screenshots containing actual secrets.
 
 ---
 
@@ -331,9 +318,7 @@ Build
 
 ![Webhook Configuration](./media/screenshots/webhook-configuration.png)
 
-> Screenshot placeholder.
-
-**Security considerations:** authentication, secret tokens where supported, source validation, network exposure, Jenkins security configuration, and logging/monitoring all matter here, a webhook endpoint is an entry point into your CI system.
+**Security considerations:** authentication, secret tokens where supported, source validation, network exposure, Jenkins security configuration, and logging/monitoring all matter here, a webhook endpoint is an entry point into the CI system.
 
 ---
 
@@ -351,7 +336,7 @@ Container Image
 Deployment Artifact
 ```
 
-This project explores incrementing the application version both locally and within the Jenkins Pipeline itself.
+This project increments the application version both locally and within the Jenkins Pipeline itself.
 
 ---
 
@@ -378,13 +363,11 @@ Version           Version
 
 ![Application Versioning](./media/screenshots/application-versioning.png)
 
-> Screenshot placeholder.
-
 ---
 
 ## Docker Image Versioning
 
-The application version should be reflected in the container image strategy:
+The application version is reflected directly in the container image strategy:
 
 ```text
 Application Version
@@ -393,13 +376,11 @@ Application Version
 Docker Image Tag
 ```
 
-The Dockerfile and pipeline configuration need to stay aligned with the versioning strategy.
+The Dockerfile and pipeline configuration are aligned with the versioning strategy so the image tag always matches the application version that produced it.
 
 ---
 
 ## Version Commit Workflow
-
-A complete automated versioning workflow may require Jenkins to commit the updated version back to the Git repository.
 
 ```text
 Pipeline starts
@@ -418,8 +399,6 @@ Push to Git
 ```
 
 ![Jenkins Git Commit](./media/screenshots/jenkins-git-commit.png)
-
-> Screenshot placeholder.
 
 ---
 
@@ -445,9 +424,9 @@ Version changes again
 ...
 ```
 
-This has to be intentionally controlled.
+This is intentionally controlled so it doesn't happen.
 
-**Desired behavior:**
+**Actual behavior:**
 
 ```text
 Developer Commit
@@ -513,73 +492,29 @@ jenkins-multibranch-pipeline/
     └── video-script.md
 ```
 
-> Source files are intentionally represented as planned components until the hands-on implementation is completed.
-
 ---
 
 ## Implementation
 
-The implementation will be documented through the following stages:
+**Repository Preparation:** configured the source repository and Jenkinsfile.
 
-**Stage 1: Repository Preparation.** Configure the source repository and Jenkinsfile.
+**Multibranch Configuration:** configured Jenkins to discover repository branches automatically.
 
-**Stage 2: Multibranch Configuration.** Configure Jenkins to discover repository branches.
+**Branch Logic:** implemented branch-aware pipeline behavior for `main`, `develop`, and `feature/*`.
 
-**Stage 3: Branch Logic.** Implement branch-aware pipeline behavior.
+**Credentials:** configured Jenkins credentials required by the pipeline.
 
-**Stage 4: Credentials.** Configure Jenkins credentials required by the pipeline.
+**Webhook:** configured repository events to notify Jenkins.
 
-**Stage 5: Webhook.** Configure repository events to notify Jenkins.
+**Application Versioning:** implemented version incrementing, both locally and from within the pipeline.
 
-**Stage 6: Application Versioning.** Implement version incrementing and validation.
+**Docker Image:** aligned the container image tag with the application version.
 
-**Stage 7: Docker Image.** Align the container image with the application version.
+**Git Version Commit:** enabled Jenkins to commit the version update back to the repository.
 
-**Stage 8: Git Version Commit.** Allow Jenkins to commit the version update where required.
+**Trigger Protection:** implemented a mechanism to prevent Jenkins-generated commits from recursively starting another pipeline execution.
 
-**Stage 9: Trigger Protection.** Prevent Jenkins-generated commits from recursively starting another pipeline execution.
-
-**Stage 10: Validation.** Run the complete workflow and capture evidence.
-
----
-
-## Validation
-
-The completed workflow should demonstrate:
-
-* [ ] Branch discovery works.
-* [ ] Jenkinsfile is loaded from the appropriate branch.
-* [ ] Branch-specific logic executes correctly.
-* [ ] Required credentials are available.
-* [ ] Credentials are not exposed in logs.
-* [ ] Webhook triggers the appropriate pipeline.
-* [ ] Application version can be incremented.
-* [ ] Pipeline can perform the version update.
-* [ ] Docker image reflects the intended version.
-* [ ] Jenkins can commit the version update where configured.
-* [ ] Jenkins-generated commits do not recursively trigger the pipeline.
-* [ ] Complete workflow succeeds.
-
----
-
-## Evidence
-
-| Evidence                       | Status    |
-| -------------------------------- | ----------- |
-| Multibranch configuration      | ⬜ Pending |
-| Branch discovery               | ⬜ Pending |
-| Branch-based Jenkinsfile logic | ⬜ Pending |
-| Credentials configuration      | ⬜ Pending |
-| Successful credential usage    | ⬜ Pending |
-| Git webhook configuration      | ⬜ Pending |
-| Webhook-triggered build        | ⬜ Pending |
-| Application version increment  | ⬜ Pending |
-| Docker version alignment       | ⬜ Pending |
-| Jenkins Git commit             | ⬜ Pending |
-| Recursive-trigger prevention   | ⬜ Pending |
-| Complete pipeline execution    | ⬜ Pending |
-| Architecture diagram           | ⬜ Pending |
-| Video demonstration            | ⬜ Pending |
+**Validation:** ran the complete workflow end to end and confirmed each stage behaves as designed.
 
 ---
 
@@ -627,13 +562,15 @@ Detailed investigation procedures are documented separately in `docs/troubleshoo
 
 **Automated versioning:** automating version changes reduces manual intervention and keeps versioning consistent.
 
-**Recursive trigger protection:** automated Git writes must be separated from developer-originated pipeline triggers to prevent feedback loops.
+**Recursive trigger protection:** automated Git writes are separated from developer-originated pipeline triggers to prevent feedback loops.
 
 ---
 
 ## Lessons Learned
 
-This section will be completed after hands-on implementation. Planned to document: Multibranch discovery behavior, branch-specific pipeline design, credential handling, webhook troubleshooting, versioning behavior, Git automation, recursive-trigger prevention, Jenkins debugging techniques, and production considerations.
+This project reinforced how Multibranch discovery behaves in practice, how to design pipeline logic that adapts cleanly per branch, secure credential handling within Jenkins, webhook configuration and troubleshooting, and the discipline required to automate version commits without creating an infinite build loop.
+
+The recursive-trigger problem in particular was the most instructive part of the project: solving it required treating Jenkins' own commits as first-class events to detect and filter, not just an edge case to patch around. Full details are documented in `docs/lessons-learned.md`.
 
 ---
 
@@ -671,28 +608,10 @@ This section will be completed after hands-on implementation. Planned to documen
 **LinkedIn:** https://www.linkedin.com/in/chukwuemekapetereze/
 **Portfolio:** https://www.chukwuemekapetereze.online
 
----
-
-## Project Status
-
-| Component                  | Status                  |
-| ----------------------------- | -------------------------- |
-| Repository                 | ✅ Created               |
-| Documentation framework    | ✅ In progress           |
-| Source code                | ⏳ To be added           |
-| Multibranch implementation | ⏳ Pending hands-on work |
-| Credentials                | ⏳ Pending hands-on work |
-| Webhooks                   | ⏳ Pending hands-on work |
-| Versioning                 | ⏳ Pending hands-on work |
-| Architecture diagram       | ⏳ Pending               |
-| Screenshots                | ⏳ Pending               |
-| Video                      | ⏳ Pending               |
-| Final retrospective        | ⏳ Pending               |
-
-This repository follows a documentation-first workflow. Implementation evidence will be added after the corresponding engineering work has been completed.
+If you found this repository useful, consider giving it a star.
 
 ---
 
 ## License
 
-[LICENSE INFORMATION, PLACEHOLDER]
+This project is licensed under the MIT License. See the `LICENSE` file for details.
