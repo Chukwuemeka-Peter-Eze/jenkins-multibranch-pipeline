@@ -1,59 +1,587 @@
 # Troubleshooting
 
-This is a reference guide to the failure modes this kind of pipeline commonly hits, organized by stage. As real issues come up during ongoing use of this pipeline, they'll be added here with the actual console output and the specific fix, the same way `jenkins-ci-pipeline`'s troubleshooting section documents real errors encountered during that build.
+This document captures the main failure modes encountered while building and validating this Jenkins Multibranch Pipeline. It is organized by pipeline stage and focuses on the actual issues, symptoms, checks, and fixes that proved useful during implementation.
+
+The current learning environment runs Jenkins and the application deployment target on the **same AWS EC2 instance**. Jenkins occupies host port `8080`, so the application is exposed on host port `8081` and listens on port `8080` inside its container.
 
 ---
 
-### Branch not discovered by the Multibranch job
+## Branch Not Discovered by the Multibranch Job
 
-**Likely cause:** branch discovery strategy in the Jenkins job configuration doesn't include the branch type being pushed, or Jenkins hasn't re-indexed since the branch was created.
+**Likely cause:**
+The branch discovery strategy in the Jenkins Multibranch job does not include the branch type being pushed, or Jenkins has not re-indexed the repository since the branch was created.
 
-**Check:** Job Configuration → Branch Sources → Discover branches setting. Trigger a manual "Scan Repository Now" to force re-indexing.
+**Check:**
 
----
-
-### Webhook push doesn't trigger a build
-
-**Likely cause:** the payload URL is wrong, Jenkins isn't reachable from the public internet (common on a fresh EC2 setup without the right security group rule or a reverse proxy), or the webhook is configured for the wrong event type.
-
-**Check:** GitHub repo → Settings → Webhooks → Recent Deliveries, to see whether GitHub even reached Jenkins and what response code came back. A red X with a connection error usually means a networking or security group problem, not a Jenkins configuration problem.
-
----
-
-### `credentials not found` error
-
-**Likely cause:** the credential ID in the Jenkinsfile doesn't exactly match the ID configured in Jenkins. This is the single most common failure in a pipeline with multiple credentials.
-
-**Check:** Manage Jenkins → Credentials, compare each ID character for character against `DOCKER_CREDENTIALS_ID`, `DEPLOY_SSH_CREDENTIALS_ID`, and `GIT_CREDENTIALS_ID` in the Jenkinsfile's `environment {}` block.
+1. Open the Multibranch Pipeline job in Jenkins.
+2. Go to **Configure → Branch Sources**.
+3. Verify that branch discovery is configured correctly.
+4. Run **Scan Repository Now**.
+5. Confirm that the expected branch appears under the Multibranch job.
 
 ---
 
-### `Increment Version` stage fails to parse the version
+## Webhook Push Does Not Trigger a Build
 
-**Likely cause:** `pom.xml`'s `<version>` isn't in plain `major.minor.patch` format, for example it still has a `-SNAPSHOT` suffix, which breaks the integer parsing this pipeline's patch-bump logic depends on.
+**Likely cause:**
+The GitHub webhook URL is incorrect, Jenkins is not reachable from the public internet, the AWS security group is blocking the request, or the webhook is configured for the wrong event type.
 
-**Check:** confirm `pom.xml` has a clean version like `1.1.0`, not `1.1.0-SNAPSHOT`.
+**Check:**
 
----
+1. Open the GitHub repository.
+2. Go to **Settings → Webhooks**.
+3. Open the relevant webhook.
+4. Check **Recent Deliveries**.
+5. Confirm that GitHub successfully reached Jenkins.
+6. Check the HTTP response code returned by Jenkins.
 
-### SSH deploy step hangs or fails with permission denied
-
-**Likely cause:** the dedicated Jenkins SSH key isn't authorized on the deployment server yet, or the manual SSH test was never confirmed working before wiring up the Jenkins credential.
-
-**Check:** SSH manually from the Jenkins server using the exact same key Jenkins uses (`ssh -i ~/.ssh/jenkins_deploy ubuntu@DEPLOY_HOST`) before assuming the problem is in Jenkins.
-
----
-
-### `git push` rejected during the version-commit stage
-
-**Likely cause:** another commit landed on the branch between the pipeline checking out the code and it trying to push the version bump, a non-fast-forward rejection.
-
-**Check:** the pipeline's Git checkout should be recent enough that this is rare, but if it happens repeatedly, consider adding a `git pull --rebase` immediately before the commit-and-push step.
+A connection failure generally points to networking, firewall, AWS security group, or Jenkins accessibility rather than a pipeline-stage problem.
 
 ---
 
-### Pipeline runs twice for what looks like one push
+## Docker Permission Denied Inside Jenkins
 
-**Likely cause:** the recursive-trigger check isn't matching the commit message correctly, often because the `VERSION_COMMIT_TAG` string was changed in one place but not the other, or the commit message got truncated somewhere.
+**Symptom:**
 
-**Check:** compare the exact string in `VERSION_COMMIT_TAG` against what actually appears in `git log -1 --pretty=%B` on the commit that triggered the second run.
+The Jenkins pipeline reaches a Docker command but fails with a permission error when attempting to communicate with the Docker daemon.
+
+Typical examples include:
+
+```text
+permission denied while trying to connect to the Docker daemon socket
+```
+
+**Likely cause:**
+The Jenkins container does not have the required permission to access the host Docker socket.
+
+**Check:**
+
+On the Jenkins host:
+
+```bash
+ls -l /var/run/docker.sock
+```
+
+Check the Docker socket group ID:
+
+```bash
+stat -c '%g' /var/run/docker.sock
+```
+
+Inside the Jenkins container, verify that the Jenkins user has access to the corresponding Docker group.
+
+**Resolution:**
+The Jenkins container was configured so that its Jenkins process could access the host Docker socket through the appropriate Docker group mapping. Jenkins was then restarted and the Docker commands were tested again.
+
+This is an important operational consideration when running Jenkins in Docker: mounting `/var/run/docker.sock` gives the Jenkins environment significant control over the host Docker daemon and therefore should be treated as a privileged configuration.
+
+---
+
+## `credentials not found` Error
+
+**Likely cause:**
+The credential ID referenced by the Jenkinsfile does not exactly match the credential ID configured in Jenkins.
+
+This pipeline depends on multiple credentials, so an incorrect ID can stop the pipeline before the relevant stage executes.
+
+**Credentials currently used by the pipeline:**
+
+```text
+Docker-Hub-Credentials
+deploy-ssh-credentials
+GitHub-PAT
+```
+
+**Check:**
+
+Go to:
+
+**Manage Jenkins → Credentials**
+
+Compare the configured IDs character-for-character with the values referenced by the Jenkinsfile.
+
+The relevant Jenkinsfile variables are:
+
+```groovy
+DOCKER_CREDENTIALS_ID
+DEPLOY_SSH_CREDENTIALS_ID
+GIT_CREDENTIALS_ID
+```
+
+Never replace credential IDs with the actual secret values.
+
+---
+
+## `Increment Version` Stage Fails
+
+**Likely cause:**
+The application version in `pom.xml` is not in the format expected by the pipeline's patch-version logic.
+
+The current implementation expects a version such as:
+
+```text
+1.1.0
+```
+
+It then increments the patch number:
+
+```text
+1.1.0 → 1.1.1
+```
+
+**Check:**
+
+Run:
+
+```bash
+mvn help:evaluate -Dexpression=project.version -DforceStdout
+```
+
+Confirm that the returned version follows the expected:
+
+```text
+major.minor.patch
+```
+
+format.
+
+For example:
+
+```text
+1.1.0
+```
+
+is compatible with the current implementation, while a version containing additional qualifiers may require changes to the version parsing logic.
+
+---
+
+## Docker Image Build or Push Fails
+
+**Likely cause:**
+Docker is unavailable to Jenkins, the image cannot be built, the registry credentials are incorrect, or the registry repository/tag is incorrect.
+
+**Check Docker access:**
+
+```bash
+docker version
+```
+
+**Check the image generated by the pipeline:**
+
+```text
+docker.io/pierrechukason/my-demo-app:<version>
+```
+
+The Docker image tag is derived from the application version.
+
+For example:
+
+```text
+docker.io/pierrechukason/my-demo-app:1.1.1
+```
+
+The pipeline authenticates using the Jenkins credential:
+
+```text
+Docker-Hub-Credentials
+```
+
+and passes the credential through:
+
+```bash
+docker login ... --password-stdin
+```
+
+rather than embedding a password in the Jenkinsfile.
+
+---
+
+## SSH Deployment Fails or Returns `Permission denied`
+
+**Likely cause:**
+The SSH private key configured in Jenkins does not correspond to the public key authorized for the `ubuntu` user on the deployment target.
+
+**Check:**
+
+First verify SSH connectivity independently of Jenkins using the deployment key.
+
+For example:
+
+```bash
+ssh -i ~/.ssh/jenkins-deployment ubuntu@DEPLOY_HOST
+```
+
+Confirm that the connection succeeds without requiring an interactive password.
+
+Then verify that the Jenkins credential:
+
+```text
+deploy-ssh-credentials
+```
+
+contains the correct private key.
+
+The pipeline uses the Jenkins SSH Agent plugin:
+
+```groovy
+sshagent(credentials: [DEPLOY_SSH_CREDENTIALS_ID])
+```
+
+This keeps the private key out of the Jenkinsfile.
+
+---
+
+## Deployment Fails Because Port `8080` Is Already in Use
+
+**Symptom:**
+
+Docker fails when starting the application because host port `8080` is already occupied.
+
+**Cause:**
+
+Jenkins itself is running on the EC2 host using port `8080`.
+
+Therefore, attempting to deploy the application with:
+
+```bash
+-p 8080:8080
+```
+
+creates a host-port conflict.
+
+**Resolution:**
+
+The application container still listens on port `8080`, but the host exposes it through port `8081`:
+
+```bash
+-p 8081:8080
+```
+
+The resulting mapping is:
+
+```text
+EC2 host :8081
+      ↓
+Application container :8080
+```
+
+This allows Jenkins to continue using:
+
+```text
+EC2 host :8080
+```
+
+while the application uses:
+
+```text
+EC2 host :8081
+```
+
+This was an important infrastructure decision in the current learning environment.
+
+---
+
+## Deployment Container Does Not Start
+
+**Likely cause:**
+The image was not successfully pulled, the previous container was not removed, or the application/container configuration is invalid.
+
+**Check running containers:**
+
+```bash
+docker ps
+```
+
+**Check all containers:**
+
+```bash
+docker ps -a
+```
+
+**Check application logs:**
+
+```bash
+docker logs my-demo-app
+```
+
+**Check the image:**
+
+```bash
+docker images
+```
+
+The deployment stage follows this general sequence:
+
+```text
+docker pull
+    ↓
+docker stop
+    ↓
+docker rm
+    ↓
+docker run
+```
+
+The previous container is stopped and removed before the new version is started.
+
+---
+
+## Application Is Running but Cannot Be Reached
+
+**Likely cause:**
+The container may be running correctly while the EC2 security group is blocking port `8081`.
+
+**Check locally on the EC2 host:**
+
+```bash
+curl http://localhost:8081
+```
+
+A successful response confirms that the container is reachable from the host.
+
+**Check the container port mapping:**
+
+```bash
+docker ps
+```
+
+The expected mapping is:
+
+```text
+0.0.0.0:8081 -> 8080/tcp
+```
+
+If local access works but external access does not, review the EC2 security group and network configuration for port `8081`.
+
+---
+
+## `git push` Fails During the Version-Commit Stage
+
+**Likely cause:**
+The GitHub credential is invalid, expired, incorrectly configured, or the remote branch has changed since the pipeline checked it out.
+
+Another common cause is using an ordinary GitHub password instead of a Personal Access Token.
+
+**Check:**
+
+Verify that the Jenkins credential:
+
+```text
+GitHub-PAT
+```
+
+contains the expected GitHub authentication material.
+
+The pipeline injects the credential through Jenkins rather than storing it in source control.
+
+The commit operation follows this general flow:
+
+```text
+Modify pom.xml
+      ↓
+git add pom.xml
+      ↓
+git commit
+      ↓
+git push
+```
+
+The version commit is tagged with:
+
+```text
+[jenkins-skip]
+```
+
+so that the resulting GitHub webhook does not cause the full pipeline to execute again.
+
+If the branch has changed independently while the pipeline is running, investigate the Git history and consider whether the version-commit strategy needs additional synchronization or retry handling.
+
+---
+
+## Pipeline Runs Again After Jenkins Commits the Version
+
+**Likely cause:**
+The version commit itself triggers the GitHub webhook, which correctly causes Jenkins to start another Multibranch build.
+
+The pipeline intentionally detects this situation rather than allowing the complete pipeline to run again.
+
+**Check the latest commit:**
+
+```bash
+git log -1 --pretty=%B
+```
+
+The Jenkins-generated commit should contain:
+
+```text
+[jenkins-skip]
+```
+
+The Jenkinsfile checks for the configured marker:
+
+```groovy
+VERSION_COMMIT_TAG = '[jenkins-skip]'
+```
+
+If the marker is detected, the pipeline sets:
+
+```text
+SKIP_BUILD=true
+```
+
+and skips the remaining pipeline stages.
+
+This prevents an automated version commit from creating a recursive build loop.
+
+---
+
+## Pipeline Runs Twice for What Looks Like One Push
+
+**Likely cause:**
+The pipeline may be receiving both the original GitHub webhook and the webhook generated by Jenkins' version commit.
+
+This is expected behavior when Jenkins modifies and pushes the repository itself.
+
+**Check:**
+
+Compare:
+
+```bash
+git log -1 --pretty=%B
+```
+
+with the configured:
+
+```groovy
+VERSION_COMMIT_TAG
+```
+
+The values must match exactly.
+
+If the Jenkins-generated commit does not contain the expected marker, the recursive-trigger protection will not recognize it.
+
+---
+
+## `Commit Version Change` Works but the Next Build Appears Empty
+
+**Explanation:**
+
+This is normally the expected result when the recursive-trigger protection is working.
+
+The sequence is:
+
+```text
+Developer push
+      ↓
+GitHub webhook
+      ↓
+Jenkins pipeline
+      ↓
+Version bump
+      ↓
+Jenkins commits version change
+      ↓
+GitHub webhook
+      ↓
+Jenkins starts another build
+      ↓
+[jenkins-skip] detected
+      ↓
+Remaining stages skipped
+```
+
+The second build exists because GitHub correctly received a new commit. The important behavior is that Jenkins does not repeat the full deployment workflow.
+
+---
+
+## Same-Host Deployment vs. Separate Deployment Server
+
+The current project uses the same EC2 instance for both Jenkins and application deployment.
+
+The architecture is therefore:
+
+```text
+AWS EC2
+├── Jenkins container → host port 8080
+└── Application container → host port 8081 → container port 8080
+```
+
+Jenkins still performs the deployment through SSH to the configured deployment target, but that target is currently the same EC2 host.
+
+This is intentional for the learning environment because it keeps the infrastructure simple while allowing the project to demonstrate:
+
+* Jenkins Multibranch Pipelines
+* GitHub webhooks
+* Jenkins Credentials
+* SSH-based deployment
+* Docker image publishing
+* Remote Docker operations
+* Automated versioning
+* Automated Git commits
+* Recursive-trigger prevention
+
+A future production-oriented architecture should separate CI infrastructure from application runtime infrastructure.
+
+---
+
+## Security Group and SSH Access
+
+SSH access is required for the Jenkins deployment process.
+
+For a learning environment, temporary broad access may be used while troubleshooting connectivity, but production infrastructure should not leave SSH exposed unnecessarily.
+
+Recommended practice:
+
+* Restrict SSH access to trusted IP ranges.
+* Avoid `0.0.0.0/0` for production SSH access.
+* Use key-based authentication.
+* Do not commit private keys.
+* Store deployment credentials in Jenkins Credentials.
+* Review AWS security-group rules after troubleshooting.
+
+---
+
+## Docker Registry Logout
+
+The pipeline explicitly logs out after registry operations.
+
+The deployment process also logs out from Docker Hub on the target host after pulling the image.
+
+This reduces the amount of time registry authentication remains configured on the environment.
+
+The Jenkins `post` section also attempts to log out of the Docker registry regardless of whether the pipeline succeeds or fails.
+
+---
+
+## General Troubleshooting Workflow
+
+When a pipeline fails, avoid changing multiple things simultaneously.
+
+Use the following sequence:
+
+```text
+1. Identify the failed stage
+        ↓
+2. Read the Jenkins console output
+        ↓
+3. Identify the first actual error
+        ↓
+4. Determine whether it is:
+   - Jenkins configuration
+   - Credentials
+   - Git/GitHub
+   - Docker
+   - SSH
+   - AWS networking
+   - Application configuration
+        ↓
+5. Reproduce the operation manually where possible
+        ↓
+6. Fix the underlying issue
+        ↓
+7. Re-run the pipeline
+        ↓
+8. Document the actual cause and solution
+```
+
+The key lesson is to troubleshoot the **first meaningful error**, rather than focusing on the later stages that fail as a consequence of it.
