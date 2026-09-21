@@ -14,6 +14,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '20'))
         timeout(time: 30, unit: 'MINUTES')
     }
+
     tools {
         maven 'maven-3.9'
     }
@@ -28,7 +29,12 @@ pipeline {
         DEPLOY_HOST               = '44.223.4.128'
         DEPLOY_USER               = 'ubuntu'
         DEPLOY_SSH_CREDENTIALS_ID = 'deploy-ssh-credentials'
-        APP_PORT                  = '8080'
+
+        // Container listens on 8080.
+        // Jenkins already uses host port 8080,
+        // so the application is exposed on host port 8081.
+        APP_PORT = '8080'
+        HOST_APP_PORT = '8081'
 
         // ---- Git write-back (for the version-commit stage) ----
         GIT_CREDENTIALS_ID = 'GitHub-PAT'
@@ -42,6 +48,10 @@ pipeline {
 
     stages {
 
+        // =================================================================
+        // CHECK FOR RECURSIVE TRIGGER
+        // =================================================================
+
         stage('Check For Recursive Trigger') {
             steps {
                 script {
@@ -51,7 +61,9 @@ pipeline {
                     ).trim()
 
                     if (lastCommitMessage.contains(env.VERSION_COMMIT_TAG)) {
-                        echo "Last commit was a Jenkins version-commit (${env.VERSION_COMMIT_TAG}). Skipping the rest of the pipeline to avoid a recursive build loop."
+                        echo "Last commit was a Jenkins version-commit (${env.VERSION_COMMIT_TAG})."
+                        echo "Skipping the rest of the pipeline to avoid a recursive build loop."
+
                         env.SKIP_BUILD = 'true'
                     } else {
                         env.SKIP_BUILD = 'false'
@@ -60,44 +72,64 @@ pipeline {
             }
         }
 
+        // =================================================================
+        // TEST
+        // =================================================================
+
         stage('Test') {
             when {
                 expression { env.SKIP_BUILD == 'false' }
             }
+
             steps {
                 echo "Running tests on branch: ${env.BRANCH_NAME}"
                 sh 'mvn test'
             }
         }
 
+        // =================================================================
+        // DETERMINE CURRENT VERSION
+        // =================================================================
+
         stage('Determine Current Version') {
             when {
                 expression { env.SKIP_BUILD == 'false' }
             }
+
             steps {
                 script {
                     env.CURRENT_VERSION = sh(
-                        script: "mvn -q help:evaluate -Dexpression=project.version -DforceStdout",
+                        script: 'mvn -q help:evaluate -Dexpression=project.version -DforceStdout',
                         returnStdout: true
                     ).trim()
+
                     echo "Current version from pom.xml: ${env.CURRENT_VERSION}"
                 }
             }
         }
 
+        // =================================================================
+        // INCREMENT VERSION
+        // =================================================================
+
         stage('Increment Version') {
             when {
                 allOf {
                     expression { env.SKIP_BUILD == 'false' }
-                    anyOf { branch 'main'; branch 'develop' }
+                    anyOf {
+                        branch 'main'
+                        branch 'develop'
+                    }
                 }
             }
+
             steps {
                 script {
                     def parts = env.CURRENT_VERSION.tokenize('.')
                     def major = parts[0]
                     def minor = parts[1]
                     def patch = (parts[2] as Integer) + 1
+
                     env.NEW_VERSION = "${major}.${minor}.${patch}"
 
                     sh """
@@ -105,44 +137,68 @@ pipeline {
                             -DnewVersion=${env.NEW_VERSION} \
                             -DgenerateBackupPoms=false
                     """
+
                     echo "Version bumped: ${env.CURRENT_VERSION} -> ${env.NEW_VERSION}"
                 }
             }
         }
 
+        // =================================================================
+        // BUILD APPLICATION
+        // =================================================================
+
         stage('Build') {
             when {
                 expression { env.SKIP_BUILD == 'false' }
             }
+
             steps {
                 echo "Building application on branch: ${env.BRANCH_NAME}"
                 sh 'mvn clean package -DskipTests'
             }
         }
 
+        // =================================================================
+        // BUILD DOCKER IMAGE
+        // =================================================================
+
         stage('Build Docker Image') {
             when {
                 allOf {
                     expression { env.SKIP_BUILD == 'false' }
-                    anyOf { branch 'main'; branch 'develop' }
+                    anyOf {
+                        branch 'main'
+                        branch 'develop'
+                    }
                 }
             }
+
             steps {
                 script {
                     env.IMAGE_TAG = "${DOCKER_REGISTRY}/${APP_NAME}:${env.NEW_VERSION}"
+
                     sh "docker build -t ${env.IMAGE_TAG} ."
+
                     echo "Built image: ${env.IMAGE_TAG}"
                 }
             }
         }
 
+        // =================================================================
+        // PUSH DOCKER IMAGE
+        // =================================================================
+
         stage('Push Docker Image') {
             when {
                 allOf {
                     expression { env.SKIP_BUILD == 'false' }
-                    anyOf { branch 'main'; branch 'develop' }
+                    anyOf {
+                        branch 'main'
+                        branch 'develop'
+                    }
                 }
             }
+
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: DOCKER_CREDENTIALS_ID,
@@ -150,12 +206,19 @@ pipeline {
                     passwordVariable: 'REG_PASS'
                 )]) {
                     sh """
-                        echo \$REG_PASS | docker login ${DOCKER_REGISTRY} -u \$REG_USER --password-stdin
+                        echo \$REG_PASS | docker login ${DOCKER_REGISTRY} \
+                            -u \$REG_USER \
+                            --password-stdin
+
                         docker push ${env.IMAGE_TAG}
                     """
                 }
             }
         }
+
+        // =================================================================
+        // DEPLOY
+        // =================================================================
 
         stage('Deploy') {
             when {
@@ -164,55 +227,125 @@ pipeline {
                     branch 'main'
                 }
             }
+
             steps {
-                sshagent(credentials: [DEPLOY_SSH_CREDENTIALS_ID]) {
-                    sh """
-                        ssh-add -l
-                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
-                            docker login ${DOCKER_REGISTRY} &&
-                            docker pull ${env.IMAGE_TAG} &&
-                            docker stop ${APP_NAME} || true &&
-                            docker rm ${APP_NAME} || true &&
-                            docker run -d --name ${APP_NAME} -p ${APP_PORT}:${APP_PORT} ${env.IMAGE_TAG}
-                        '
-                    """
+
+                // Get Docker Hub credentials from Jenkins Credentials Store
+                withCredentials([usernamePassword(
+                    credentialsId: DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'REG_USER',
+                    passwordVariable: 'REG_PASS'
+                )]) {
+
+                    // Start SSH agent using the deployment SSH credential
+                    sshagent(credentials: [DEPLOY_SSH_CREDENTIALS_ID]) {
+
+                        // -------------------------------------------------
+                        // 1. Authenticate deployment server to Docker Hub
+                        // -------------------------------------------------
+                        echo "Authenticating deployment server to Docker Hub..."
+
+                        sh """
+                            printf '%s\\n' "\$REG_PASS" | ssh \
+                                -o StrictHostKeyChecking=no \
+                                ${DEPLOY_USER}@${DEPLOY_HOST} \
+                                "docker login ${DOCKER_REGISTRY} -u '${REG_USER}' --password-stdin"
+                        """
+
+                        // -------------------------------------------------
+                        // 2. Pull the new Docker image
+                        // 3. Stop existing application container
+                        // 4. Remove existing application container
+                        // 5. Start the new application container
+                        // -------------------------------------------------
+                        echo "Deploying ${env.IMAGE_TAG} to ${DEPLOY_HOST}..."
+
+                        sh """
+                            ssh \
+                                -o StrictHostKeyChecking=no \
+                                ${DEPLOY_USER}@${DEPLOY_HOST} '
+                                    docker pull ${env.IMAGE_TAG} &&
+                                    (docker stop ${APP_NAME} || true) &&
+                                    (docker rm ${APP_NAME} || true) &&
+                                    docker run -d \
+                                        --name ${APP_NAME} \
+                                        -p ${HOST_APP_PORT}:${APP_PORT} \
+                                        ${env.IMAGE_TAG}
+                                '
+                        """
+
+                        // -------------------------------------------------
+                        // 6. Remove Docker Hub credentials from server
+                        // -------------------------------------------------
+                        echo "Logging out of Docker Hub on deployment server..."
+
+                        sh """
+                            ssh \
+                                -o StrictHostKeyChecking=no \
+                                ${DEPLOY_USER}@${DEPLOY_HOST} \
+                                'docker logout ${DOCKER_REGISTRY} || true'
+                        """
+                    }
                 }
-                echo "Deployed ${env.IMAGE_TAG} to ${DEPLOY_HOST}"
+
+                echo "Deployed ${env.IMAGE_TAG} to ${DEPLOY_HOST}:${HOST_APP_PORT}"
             }
         }
+
+        // =================================================================
+        // COMMIT VERSION CHANGE
+        // =================================================================
 
         stage('Commit Version Change') {
             when {
                 allOf {
                     expression { env.SKIP_BUILD == 'false' }
-                    anyOf { branch 'main'; branch 'develop' }
+                    anyOf {
+                        branch 'main'
+                        branch 'develop'
+                    }
                 }
             }
+
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: GIT_CREDENTIALS_ID,
                     usernameVariable: 'GIT_USER',
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
+
                     sh """
                         git config user.name "${GIT_USER_NAME}"
                         git config user.email "${GIT_USER_EMAIL}"
+
                         git add pom.xml
-                        git commit -m "${VERSION_COMMIT_TAG} bump version to ${env.NEW_VERSION}"
-                        git push https://\$GIT_USER:\$GIT_TOKEN@${GIT_REPO_URL} HEAD:${env.BRANCH_NAME}
+
+                        git commit \
+                            -m "${VERSION_COMMIT_TAG} bump version to ${env.NEW_VERSION}"
+
+                        git push \
+                            https://\\\$GIT_USER:\\\$GIT_TOKEN@${GIT_REPO_URL} \
+                            HEAD:${env.BRANCH_NAME}
                     """
                 }
             }
         }
     }
 
+    // =====================================================================
+    // POST ACTIONS
+    // =====================================================================
+
     post {
+
         success {
             echo "Pipeline completed successfully on branch ${env.BRANCH_NAME}."
         }
+
         failure {
             echo "Pipeline failed on branch ${env.BRANCH_NAME}. Check the stage logs above."
         }
+
         always {
             sh 'docker logout ${DOCKER_REGISTRY} || true'
         }
