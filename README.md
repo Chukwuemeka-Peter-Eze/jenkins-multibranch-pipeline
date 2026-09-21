@@ -598,8 +598,6 @@ The recursive-trigger problem in particular was the most instructive part of the
 
 **Jenkins Shared Library:** [jenkins-shared-library](https://github.com/Chukwuemeka-Peter-Eze/jenkins-shared-library)
 
-**Portfolio Website:** [chukwuemekapetereze.online](https://www.chukwuemekapetereze.online)
-
 ---
 
 ## Connect
