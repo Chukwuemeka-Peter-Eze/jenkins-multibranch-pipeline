@@ -205,6 +205,7 @@ pipeline {
                     usernameVariable: 'REG_USER',
                     passwordVariable: 'REG_PASS'
                 )]) {
+
                     sh """
                         echo \$REG_PASS | docker login ${DOCKER_REGISTRY} \
                             -u \$REG_USER \
@@ -309,25 +310,61 @@ pipeline {
             }
 
             steps {
+
                 withCredentials([usernamePassword(
                     credentialsId: GIT_CREDENTIALS_ID,
                     usernameVariable: 'GIT_USER',
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
 
-                    sh """
-                        git config user.name "${GIT_USER_NAME}"
-                        git config user.email "${GIT_USER_EMAIL}"
+                    script {
 
-                        git add pom.xml
+                        // Configure Git identity
+                        sh """
+                            git config user.name "${GIT_USER_NAME}"
+                            git config user.email "${GIT_USER_EMAIL}"
+                        """
 
-                        git commit \
-                            -m "${VERSION_COMMIT_TAG} bump version to ${env.NEW_VERSION}"
+                        // Stage the version change
+                        sh 'git add pom.xml'
 
-                        git push \
-                            https://\\\$GIT_USER:\\\$GIT_TOKEN@${GIT_REPO_URL} \
-                            HEAD:${env.BRANCH_NAME}
-                    """
+                        // Create Jenkins version commit
+                        sh """
+                            git commit \
+                                -m "${VERSION_COMMIT_TAG} bump version to ${env.NEW_VERSION}"
+                        """
+
+                        // Push using the Jenkins GitHub credentials.
+                        //
+                        // GIT_ASKPASS prevents the username/token from
+                        // appearing directly in the Git remote URL.
+                        withEnv([
+                            "GIT_ASKPASS=${WORKSPACE}/.git-askpass.sh",
+                            "GIT_TERMINAL_PROMPT=0"
+                        ]) {
+
+                            writeFile(
+                                file: '.git-askpass.sh',
+                                text: '''#!/bin/sh
+case "$1" in
+    *Username*) printf '%s\\n' "$GIT_USER" ;;
+    *Password*) printf '%s\\n' "$GIT_TOKEN" ;;
+esac
+'''
+                            )
+
+                            sh 'chmod 700 .git-askpass.sh'
+
+                            sh """
+                                git push \
+                                    https://${GIT_REPO_URL} \
+                                    HEAD:${env.BRANCH_NAME}
+                            """
+                        }
+
+                        // Remove the temporary authentication helper
+                        sh 'rm -f .git-askpass.sh'
+                    }
                 }
             }
         }
