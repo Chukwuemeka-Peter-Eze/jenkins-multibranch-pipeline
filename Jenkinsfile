@@ -30,13 +30,13 @@ pipeline {
         DEPLOY_USER               = 'ubuntu'
         DEPLOY_SSH_CREDENTIALS_ID = 'deploy-ssh-credentials'
 
-        // Container listens on 8080.
+        // Application listens on container port 8080.
         // Jenkins already uses host port 8080,
         // so the application is exposed on host port 8081.
-        APP_PORT = '8080'
+        APP_PORT      = '8080'
         HOST_APP_PORT = '8081'
 
-        // ---- Git write-back (for the version-commit stage) ----
+        // ---- Git write-back ----
         GIT_CREDENTIALS_ID = 'GitHub-PAT'
         GIT_REPO_URL       = 'github.com/Chukwuemeka-Peter-Eze/jenkins-multibranch-pipeline.git'
         GIT_USER_NAME      = 'Chukwuemeka-Peter-Eze'
@@ -230,34 +230,34 @@ pipeline {
 
             steps {
 
-                // Get Docker Hub credentials from Jenkins Credentials Store
                 withCredentials([usernamePassword(
                     credentialsId: DOCKER_CREDENTIALS_ID,
                     usernameVariable: 'REG_USER',
                     passwordVariable: 'REG_PASS'
                 )]) {
 
-                    // Start SSH agent using the deployment SSH credential
                     sshagent(credentials: [DEPLOY_SSH_CREDENTIALS_ID]) {
 
                         // -------------------------------------------------
                         // 1. Authenticate deployment server to Docker Hub
                         // -------------------------------------------------
+
                         echo "Authenticating deployment server to Docker Hub..."
 
                         sh """
                             printf '%s\\n' "\$REG_PASS" | ssh \
                                 -o StrictHostKeyChecking=no \
                                 ${DEPLOY_USER}@${DEPLOY_HOST} \
-                                "docker login ${DOCKER_REGISTRY} -u '${REG_USER}' --password-stdin"
+                                "docker login ${DOCKER_REGISTRY} -u '\$REG_USER' --password-stdin"
                         """
 
                         // -------------------------------------------------
-                        // 2. Pull the new Docker image
-                        // 3. Stop existing application container
-                        // 4. Remove existing application container
-                        // 5. Start the new application container
+                        // 2. Pull new image
+                        // 3. Stop existing application
+                        // 4. Remove existing application
+                        // 5. Start new application
                         // -------------------------------------------------
+
                         echo "Deploying ${env.IMAGE_TAG} to ${DEPLOY_HOST}..."
 
                         sh """
@@ -277,6 +277,7 @@ pipeline {
                         // -------------------------------------------------
                         // 6. Remove Docker Hub credentials from server
                         // -------------------------------------------------
+
                         echo "Logging out of Docker Hub on deployment server..."
 
                         sh """
