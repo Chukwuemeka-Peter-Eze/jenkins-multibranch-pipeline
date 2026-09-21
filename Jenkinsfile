@@ -167,6 +167,7 @@ pipeline {
             steps {
                 sshagent(credentials: [DEPLOY_SSH_CREDENTIALS_ID]) {
                     sh """
+                        ssh-add -l
                         ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
                             docker login ${DOCKER_REGISTRY} &&
                             docker pull ${env.IMAGE_TAG} &&
