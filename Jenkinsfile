@@ -14,6 +14,9 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '20'))
         timeout(time: 30, unit: 'MINUTES')
     }
+    tools {
+        maven 'maven-3.9'
+    }
 
     environment {
         // ---- Docker registry (Docker Hub) ----
