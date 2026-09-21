@@ -2,17 +2,69 @@
 
 ## Approach
 
-This pipeline uses semantic versioning (`major.minor.patch`) and automatically increments the **patch** number on every build to `main` or `develop`. Major and minor bumps are intentionally left as manual decisions, patch-only automation is the safer default: it never accidentally jumps a version number in a way that implies a breaking or feature change when the pipeline can't actually know that.
+This pipeline uses a simple `major.minor.patch` versioning strategy.
+
+The pipeline automatically increments the **patch** number on `main` and `develop`.
+
+For example:
 
 ```text
-1.1.0  →  1.1.1  →  1.1.2  →  1.1.3 ...
+1.1.0 → 1.1.1 → 1.1.2 → 1.1.3
 ```
 
-## Why not SNAPSHOT versioning
+Major and minor version changes remain manual decisions.
 
-Maven's `-SNAPSHOT` convention marks a version as mutable, the same SNAPSHOT version can be rebuilt and redeployed many times, overwriting what came before in a shared repository. That model conflicts with what this pipeline does: every build produces a specific, immutable, traceable version that gets tagged, published, and committed back to Git. Using plain release-style versions (`1.1.0`, not `1.1.0-SNAPSHOT`) keeps that traceability intact, every Docker image tag corresponds to exactly one commit and one pom.xml version.
+This keeps the automated versioning logic intentionally simple: the pipeline can safely determine that a new build has occurred, but it cannot reliably determine whether a change represents a new feature or a breaking change.
 
-## How the version is read and incremented
+---
+
+# Branch Behavior
+
+Versioning is intentionally restricted to the integration and deployment branches.
+
+| Branch      | Version Bump | Docker Image | Deployment |
+| ----------- | -----------: | -----------: | ---------: |
+| `feature/*` |           No |           No |         No |
+| `develop`   |          Yes |          Yes |         No |
+| `main`      |          Yes |          Yes |        Yes |
+
+Feature branches therefore focus on testing and building the application without automatically publishing versioned Docker images.
+
+---
+
+# Why Use Release-Style Versions?
+
+The pipeline uses versions such as:
+
+```text
+1.1.0
+1.1.1
+1.1.2
+```
+
+rather than:
+
+```text
+1.1.0-SNAPSHOT
+```
+
+A `SNAPSHOT` version is mutable and can represent multiple builds of the same logical version.
+
+This pipeline is designed around identifiable Docker image versions.
+
+For example:
+
+```text
+docker.io/pierrechukason/my-demo-app:1.1.1
+```
+
+The image tag therefore communicates which application version the image represents.
+
+---
+
+# How the Current Version Is Read
+
+The pipeline uses Maven to read the version directly from `pom.xml`:
 
 ```groovy
 env.CURRENT_VERSION = sh(
@@ -21,30 +73,214 @@ env.CURRENT_VERSION = sh(
 ).trim()
 ```
 
-This uses Maven's own `help:evaluate` goal to read `project.version` directly from `pom.xml`, rather than parsing the XML manually, which is more reliable across formatting differences.
+This avoids manually parsing the XML structure of `pom.xml`.
 
-The increment itself splits the version string on `.` and increments the last segment:
+Maven itself determines the current project version.
+
+---
+
+# How the Patch Version Is Incremented
+
+The pipeline splits the version into its components:
 
 ```groovy
 def parts = env.CURRENT_VERSION.tokenize('.')
+
+def major = parts[0]
+def minor = parts[1]
 def patch = (parts[2] as Integer) + 1
-env.NEW_VERSION = "${parts[0]}.${parts[1]}.${patch}"
+
+env.NEW_VERSION = "${major}.${minor}.${patch}"
 ```
 
-The new version is then written back into `pom.xml` using the `versions-maven-plugin`, invoked with its fully qualified coordinates so it works without needing to be declared in the `pom.xml` itself:
+For example:
+
+```text
+Current version:
+1.1.0
+
+New version:
+1.1.1
+```
+
+The current implementation assumes a straightforward:
+
+```text
+major.minor.patch
+```
+
+version format.
+
+---
+
+# Writing the New Version to `pom.xml`
+
+The pipeline uses the Maven Versions Plugin:
 
 ```bash
-mvn org.codehaus.mojo:versions-maven-plugin:2.16.2:set -DnewVersion=1.1.1 -DgenerateBackupPoms=false
+mvn org.codehaus.mojo:versions-maven-plugin:2.16.2:set \
+  -DnewVersion=1.1.1 \
+  -DgenerateBackupPoms=false
 ```
 
-## How the Docker tag stays aligned
+The plugin updates the Maven project version without requiring the plugin to be permanently declared in the project's `pom.xml`.
 
-The Docker image tag is built directly from the same `NEW_VERSION` variable used to update `pom.xml`, so there's no separate versioning logic to keep in sync:
+The updated `pom.xml` is then committed back to Git.
+
+---
+
+# Docker Image Versioning
+
+The Docker image tag is generated from the same `NEW_VERSION` value:
 
 ```groovy
 env.IMAGE_TAG = "${DOCKER_REGISTRY}/${APP_NAME}:${env.NEW_VERSION}"
 ```
 
-## What a manual major/minor bump would look like
+For example:
 
-Not implemented yet, but the natural extension: check the triggering commit message for a marker like `[minor]` or `[major]` (similar to how `[jenkins-skip]` is already checked for recursive-trigger prevention), and branch the increment logic accordingly instead of always bumping the patch number.
+```text
+Application version:
+1.1.1
+
+Docker image:
+docker.io/pierrechukason/my-demo-app:1.1.1
+```
+
+This prevents the Docker image version from being maintained through a separate piece of versioning logic.
+
+---
+
+# Versioning and Git
+
+After the version is updated, Jenkins commits the change:
+
+```text
+[jenkins-skip] bump version to 1.1.1
+```
+
+The `[jenkins-skip]` marker has two purposes:
+
+1. It documents that the commit was generated by Jenkins.
+2. It allows the next webhook-triggered pipeline execution to identify the automated commit and skip the normal pipeline stages.
+
+The resulting flow is:
+
+```text
+Build starts
+    ↓
+Read version from pom.xml
+    ↓
+Increment patch version
+    ↓
+Update pom.xml
+    ↓
+Build application
+    ↓
+Build Docker image using new version
+    ↓
+Push Docker image
+    ↓
+Deploy on main
+    ↓
+Commit updated pom.xml
+    ↓
+GitHub webhook
+    ↓
+[jenkins-skip] detected
+    ↓
+Pipeline stages skipped
+```
+
+---
+
+# Why the Version Is Committed Back to Git
+
+Committing the updated `pom.xml` means the repository records the version generated by the pipeline.
+
+This prevents the pipeline from repeatedly starting from the same version on the next normal run.
+
+For example:
+
+```text
+Git:
+1.1.0
+
+Pipeline:
+1.1.0 → 1.1.1
+
+Git after successful commit:
+1.1.1
+```
+
+The next normal pipeline execution can therefore start from `1.1.1`.
+
+---
+
+# Current Limitation
+
+The current versioning implementation is intentionally simple.
+
+It assumes:
+
+```text
+major.minor.patch
+```
+
+and automatically increments only the patch number.
+
+It does not yet implement:
+
+* Automatic major version detection
+* Automatic minor version detection
+* Conventional Commits parsing
+* Release branches
+* Git tags
+* Changelog generation
+* Rollback-aware version management
+
+These can be introduced as the project evolves.
+
+---
+
+# Possible Future Extension
+
+A future implementation could use commit conventions to determine the type of version change.
+
+For example:
+
+```text
+fix: correct application configuration
+```
+
+could result in a patch increment, while:
+
+```text
+feat: add customer endpoint
+```
+
+could result in a minor increment.
+
+A breaking change could trigger a major version increment.
+
+However, this should be implemented deliberately because automated version classification introduces additional rules and edge cases.
+
+---
+
+# Engineering Takeaway
+
+The key lesson is that application versioning becomes much easier to reason about when one version value is reused across the delivery process:
+
+```text
+pom.xml
+   ↓
+Maven application
+   ↓
+Docker image tag
+   ↓
+Deployment
+   ↓
+Git commit
+```
+
+The pipeline therefore maintains a clear relationship between the application source, the built artifact, and the deployed version.
