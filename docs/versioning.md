@@ -1,60 +1,50 @@
 # Application Versioning
 
-## Table of Contents
+## Approach
 
-* [Purpose](#purpose)
-* [Versioning Flow](#versioning-flow)
-* [Local Version Increment](#local-version-increment)
-* [Pipeline Version Increment](#pipeline-version-increment)
-* [Docker Alignment](#docker-alignment)
-* [Evidence](#evidence)
-
----
-
-## Purpose
-
-Application versioning establishes an explicit identity for application releases and associated artifacts.
-
----
-
-## Versioning Flow
+This pipeline uses semantic versioning (`major.minor.patch`) and automatically increments the **patch** number on every build to `main` or `develop`. Major and minor bumps are intentionally left as manual decisions, patch-only automation is the safer default: it never accidentally jumps a version number in a way that implies a breaking or feature change when the pipeline can't actually know that.
 
 ```text
-Current Version
-      ↓
-Version Increment
-      ↓
-Build
-      ↓
-Docker Image
-      ↓
-Git Commit
+1.1.0  →  1.1.1  →  1.1.2  →  1.1.3 ...
 ```
 
----
+## Why not SNAPSHOT versioning
 
-## Local Version Increment
+Maven's `-SNAPSHOT` convention marks a version as mutable, the same SNAPSHOT version can be rebuilt and redeployed many times, overwriting what came before in a shared repository. That model conflicts with what this pipeline does: every build produces a specific, immutable, traceable version that gets tagged, published, and committed back to Git. Using plain release-style versions (`1.1.0`, not `1.1.0-SNAPSHOT`) keeps that traceability intact, every Docker image tag corresponds to exactly one commit and one pom.xml version.
 
-The initial versioning exercise includes incrementing the application version using the build tooling.
+## How the version is read and incremented
 
----
+```groovy
+env.CURRENT_VERSION = sh(
+    script: "mvn -q help:evaluate -Dexpression=project.version -DforceStdout",
+    returnStdout: true
+).trim()
+```
 
-## Pipeline Version Increment
+This uses Maven's own `help:evaluate` goal to read `project.version` directly from `pom.xml`, rather than parsing the XML manually, which is more reliable across formatting differences.
 
-The pipeline can automate version changes as part of CI/CD execution. The project checklist specifically identifies both local Maven version incrementing and version incrementing within the Jenkins Pipeline itself.
+The increment itself splits the version string on `.` and increments the last segment:
 
----
+```groovy
+def parts = env.CURRENT_VERSION.tokenize('.')
+def patch = (parts[2] as Integer) + 1
+env.NEW_VERSION = "${parts[0]}.${parts[1]}.${patch}"
+```
 
-## Docker Alignment
+The new version is then written back into `pom.xml` using the `versions-maven-plugin`, invoked with its fully qualified coordinates so it works without needing to be declared in the `pom.xml` itself:
 
-The Dockerfile should be adjusted where necessary so the resulting container artifact corresponds appropriately with the application version.
+```bash
+mvn org.codehaus.mojo:versions-maven-plugin:2.16.2:set -DnewVersion=1.1.1 -DgenerateBackupPoms=false
+```
 
----
+## How the Docker tag stays aligned
 
-## Evidence
+The Docker image tag is built directly from the same `NEW_VERSION` variable used to update `pom.xml`, so there's no separate versioning logic to keep in sync:
 
-![Version Before](../media/screenshots/version-before.png)
+```groovy
+env.IMAGE_TAG = "${DOCKER_REGISTRY}/${APP_NAME}:${env.NEW_VERSION}"
+```
 
-![Version After](../media/screenshots/version-after.png)
+## What a manual major/minor bump would look like
 
-![Versioned Docker Image](../media/screenshots/versioned-image.png)
+Not implemented yet, but the natural extension: check the triggering commit message for a marker like `[minor]` or `[major]` (similar to how `[jenkins-skip]` is already checked for recursive-trigger prevention), and branch the increment logic accordingly instead of always bumping the patch number.

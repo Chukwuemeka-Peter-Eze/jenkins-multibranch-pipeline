@@ -1,19 +1,6 @@
-# Jenkins Multibranch Pipeline: Commands Reference
+# Commands Reference
 
-Commands used for repository management, Jenkins administration, application versioning, Docker image operations, and Git automation.
-
----
-
-## Table of Contents
-
-* [Git](#git)
-* [Jenkins Container](#jenkins-container)
-* [Docker](#docker)
-* [Maven](#maven)
-* [Version Inspection](#version-inspection)
-* [Git Version Commit](#git-version-commit)
-* [Validation](#validation)
-* [Security Note](#security-note)
+A reference of the commands this project's pipeline runs, and the manual commands used while building and testing it. Grouped by tool.
 
 ---
 
@@ -21,116 +8,60 @@ Commands used for repository management, Jenkins administration, application ver
 
 ```bash
 git clone https://github.com/Chukwuemeka-Peter-Eze/jenkins-multibranch-pipeline.git
-cd jenkins-multibranch-pipeline
-
-git status                          # Check status
-git branch -a                       # List branches
-git checkout -b feature/<branch-name>  # Create a branch
-git checkout <branch-name>          # Switch branches
-git pull origin <branch-name>       # Pull changes
-git add .                           # Stage changes
-git commit -m "feat: update application version"   # Commit
-git push origin <branch-name>       # Push
+git checkout -b feature/example-branch
+git add .
+git commit -m "message"
+git push origin feature/example-branch
+git log -1 --pretty=%B          # used by the pipeline to check the last commit message
 ```
-
----
-
-## Jenkins Container
-
-```bash
-docker ps                                    # List Jenkins containers
-docker inspect <jenkins-container>           # Inspect Jenkins
-docker exec -it <jenkins-container> bash     # Open a shell
-docker exec -u 0 -it <jenkins-container> bash  # Open a root shell
-```
-
----
-
-## Docker
-
-```bash
-docker images                             # List images
-docker build -t <image-name>:<version> .  # Build an image
-docker ps                                 # List running containers
-docker inspect <image-name>:<version>     # Inspect an image
-```
-
----
 
 ## Maven
 
 ```bash
-mvn -version         # Display Maven version
-mvn clean package    # Build the application
-mvn test             # Run tests
-mvn help:evaluate -Dexpression=project.version -q -DforceStdout   # Inspect the project version
+mvn test                                                  # Test stage
+mvn clean package -DskipTests                             # Build stage
+mvn -q help:evaluate -Dexpression=project.version -DforceStdout   # Determine Current Version stage
+mvn org.codehaus.mojo:versions-maven-plugin:2.16.2:set -DnewVersion=X.Y.Z -DgenerateBackupPoms=false   # Increment Version stage
 ```
 
-> Verify the exact command against the application implementation before using it in final documentation.
-
----
-
-## Version Inspection
+## Docker
 
 ```bash
-git status                                  # Current working tree
-git log --oneline -10                       # Recent commits
-git diff                                     # Inspect changes
-mvn help:evaluate -Dexpression=project.version -q -DforceStdout   # Application version
+docker build -t docker.io/pierrechukason/my-demo-app:VERSION .
+docker login docker.io -u USERNAME --password-stdin
+docker push docker.io/pierrechukason/my-demo-app:VERSION
+docker pull docker.io/pierrechukason/my-demo-app:VERSION
+docker stop my-demo-app
+docker rm my-demo-app
+docker run -d --name my-demo-app -p 8080:8080 docker.io/pierrechukason/my-demo-app:VERSION
+docker ps
+docker logs my-demo-app
 ```
 
----
-
-## Git Version Commit
-
-Conceptual workflow:
-
-```text
-Update version
-      ↓
-Validate changes
-      ↓
-git status
-      ↓
-git add
-      ↓
-git commit
-      ↓
-git push
-```
-
-Example placeholder:
+## SSH
 
 ```bash
-git add <version-file>
-git commit -m "chore: update application version"
-git push origin <branch-name>
+ssh-keygen -t ed25519 -C "jenkins-deployment"
+ssh-copy-id -i ~/.ssh/jenkins_deploy.pub ubuntu@DEPLOY_HOST
+ssh -i ~/.ssh/jenkins_deploy ubuntu@DEPLOY_HOST
 ```
 
-The final command sequence must reflect the implementation actually used.
+## Linux (deployment server)
 
----
-
-## Validation
-
-```text
-Branch
-  ↓
-Jenkinsfile
-  ↓
-Pipeline
-  ↓
-Version
-  ↓
-Docker image
-  ↓
-Git commit
-  ↓
-Trigger filtering
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+docker run hello-world
 ```
 
----
+## Jenkins Pipeline Steps Used
 
-## Security Note
-
-Never place passwords, access tokens, private keys, or webhook secrets inside this file. Use placeholders for sensitive values.
+| Step | Purpose |
+|---|---|
+| `sh` | Run shell commands inside a stage |
+| `script { }` | Run Groovy logic inline within Declarative Pipeline |
+| `withCredentials([...])` | Inject a Jenkins credential into a stage without exposing it |
+| `sshagent([...])` | Wrap SSH commands with a Jenkins-managed private key |
+| `when { branch '...' }` | Restrict a stage to a specific branch |
+| `when { expression { ... } }` | Restrict a stage based on a computed condition (used for recursive-trigger skipping) |

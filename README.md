@@ -10,8 +10,26 @@
 
 ---
 
+## Project Status
+
+| Capability | Status |
+|---|---|
+| Multibranch Pipeline job (branch discovery) | Implemented |
+| Branch-specific pipeline logic (`main` / `develop` / `feature/*`) | Implemented |
+| Jenkins Credentials integration | Implemented |
+| Git webhook trigger | Implemented |
+| Application version incrementing | Implemented |
+| Docker image build and version tagging | Implemented |
+| Automated version commit back to Git | Implemented |
+| Recursive-trigger prevention | Implemented |
+
+The `Jenkinsfile` in this repo reflects the full implementation described below. Screenshots throughout this document show the pipeline running end to end.
+
+---
+
 ## Table of Contents
 
+* [Project Status](#project-status)
 * [Overview](#overview)
 * [Engineering Problem](#engineering-problem)
 * [Solution](#solution)
@@ -28,9 +46,10 @@
 * [Docker Image Versioning](#docker-image-versioning)
 * [Version Commit Workflow](#version-commit-workflow)
 * [Preventing Recursive Pipeline Execution](#preventing-recursive-pipeline-execution)
+* [Deployment](#deployment)
 * [Technology Stack](#technology-stack)
 * [Repository Structure](#repository-structure)
-* [Implementation](#implementation)
+* [Setup & Configuration](#setup--configuration)
 * [Security Considerations](#security-considerations)
 * [Troubleshooting](#troubleshooting)
 * [Engineering Decisions](#engineering-decisions)
@@ -46,9 +65,12 @@
 
 Modern application repositories commonly contain multiple branches representing different stages of development and delivery. A CI/CD system needs to discover these branches, execute the appropriate pipeline logic, respond to repository changes, securely access required resources, and manage application versions consistently.
 
-This project implements a Jenkins-based approach using Multibranch Pipelines, branch-aware Jenkinsfiles, Jenkins Credentials, Git webhooks, automated application versioning, Docker image version alignment, automated commits from Jenkins, and protection against recursive pipeline execution.
+This project implements a Jenkins-based approach using Multibranch Pipelines, branch-aware Jenkinsfile logic, Jenkins Credentials, Git webhooks, automated application versioning, Docker image version alignment, automated commits from Jenkins, and protection against recursive pipeline execution.
 
 The result is a branch-aware CI/CD workflow that connects source-control activity with automated build and delivery processes.
+
+![Pipeline Overview](./media/screenshots/pipeline-overview.png)
+*Full pipeline run, all stages, showing test through deploy completing successfully.*
 
 ---
 
@@ -79,8 +101,6 @@ Application versioning introduces another consideration. If the pipeline changes
 ---
 
 ## Solution
-
-This project combines several Jenkins capabilities into one workflow.
 
 ```text
 Git Repository
@@ -148,10 +168,6 @@ Jenkins Multibranch Pipeline
 ---
 
 ## Architecture
-
-![Jenkins Multibranch Pipeline Architecture](./media/diagrams/jenkins-multibranch-architecture.png)
-
-### Conceptual Architecture
 
 ```text
                          ┌─────────────────────┐
@@ -253,6 +269,7 @@ Repository
 Jenkins discovers the branches and evaluates the pipeline definition associated with each one.
 
 ![Multibranch Pipeline](./media/screenshots/multibranch-pipeline.png)
+*Jenkins job view showing branches automatically discovered from the repository.*
 
 ---
 
@@ -262,16 +279,17 @@ The pipeline inspects the current branch and applies branch-specific behavior.
 
 ```text
 if main
-    → production-oriented workflow
+    → production-oriented workflow, deploys
 
 if develop
-    → integration workflow
+    → integration workflow, builds and publishes, no deploy
 
 if feature/*
-    → validation workflow
+    → validation workflow, test and build only
 ```
 
 ![Branch-Based Pipeline Logic](./media/screenshots/branch-based-logic.png)
+*Stage view comparing a feature branch run (test and build only) against a main branch run (full pipeline including deploy).*
 
 ---
 
@@ -279,7 +297,7 @@ if feature/*
 
 CI/CD pipelines frequently require authentication to external systems: source-control repositories, container registries, artifact repositories, cloud platforms, and deployment targets.
 
-Credentials are never hard-coded into Jenkinsfiles. Instead, Jenkins Credentials provide controlled access to sensitive values.
+Credentials are never hard-coded into the Jenkinsfile. Instead, Jenkins Credentials provide controlled access to sensitive values.
 
 ```text
 Jenkinsfile
@@ -293,6 +311,7 @@ Authenticated operation
 ```
 
 ![Jenkins Credentials](./media/screenshots/jenkins-credentials.png)
+*Jenkins credentials store showing the configured credential IDs (Docker Hub, deploy SSH key, GitHub PAT), values hidden.*
 
 ---
 
@@ -317,8 +336,9 @@ Build
 ```
 
 ![Webhook Configuration](./media/screenshots/webhook-configuration.png)
+*GitHub repository webhook configuration, pointed at the Jenkins endpoint.*
 
-**Security considerations:** authentication, secret tokens where supported, source validation, network exposure, Jenkins security configuration, and logging/monitoring all matter here, a webhook endpoint is an entry point into the CI system.
+**Security considerations:** authentication, secret tokens where supported, source validation, network exposure, Jenkins security configuration, and logging and monitoring all matter here, a webhook endpoint is an entry point into the CI system.
 
 ---
 
@@ -362,6 +382,7 @@ Version           Version
 ```
 
 ![Application Versioning](./media/screenshots/application-versioning.png)
+*Console output showing the version read from pom.xml, incremented, and applied.*
 
 ---
 
@@ -377,6 +398,9 @@ Docker Image Tag
 ```
 
 The Dockerfile and pipeline configuration are aligned with the versioning strategy so the image tag always matches the application version that produced it.
+
+![Docker Image Versioning](./media/screenshots/docker-image-versioning.png)
+*Docker Hub repository showing pushed image tags matching each incremented application version.*
 
 ---
 
@@ -399,6 +423,7 @@ Push to Git
 ```
 
 ![Jenkins Git Commit](./media/screenshots/jenkins-git-commit.png)
+*Git commit history showing an automated version-bump commit pushed by Jenkins.*
 
 ---
 
@@ -441,10 +466,25 @@ Webhook
       ↓
 Commit identified as Jenkins-generated
       ↓
-Pipeline execution ignored
+Pipeline execution skipped
 ```
 
+![Recursive Trigger Prevention](./media/screenshots/recursive-trigger-prevention.png)
+*Console output of a build triggered by Jenkins' own version-commit, showing it being detected and skipped.*
+
 This is a core part of the project's engineering design, not just a configuration detail.
+
+---
+
+## Deployment
+
+On the `main` branch, the pipeline connects to a dedicated deployment server over SSH, pulls the newly published Docker image, stops the previous container, and starts the new one.
+
+![Deploy Stage](./media/screenshots/deploy-stage-success.png)
+*Deploy stage succeeding in the Jenkins pipeline view.*
+
+![Application Running](./media/screenshots/application-live.png)
+*The deployed application responding at the deployment server's address.*
 
 ---
 
@@ -452,14 +492,19 @@ This is a core part of the project's engineering design, not just a configuratio
 
 | Technology                   | Purpose                                  |
 | ----------------------------- | ------------------------------------------ |
-| Jenkins                      | CI/CD orchestration                      |
-| Jenkins Pipeline             | Pipeline-as-code                         |
-| Jenkins Multibranch Pipeline | Branch-aware automation                  |
-| Git                          | Source control                           |
-| GitHub                       | Repository hosting and webhook source    |
-| Groovy                       | Jenkins pipeline implementation          |
-| Maven                        | Application build and version management |
-| Docker                       | Container image creation                 |
+| AWS EC2 | Jenkins server and deployment server infrastructure |
+| Ubuntu Linux | Operating system |
+| Git | Version control |
+| GitHub | Source control repository and webhook source |
+| Jenkins | CI/CD orchestration |
+| Jenkins Pipeline | Pipeline-as-code |
+| Jenkins Multibranch Pipeline | Branch-aware automation |
+| Groovy | Jenkins pipeline implementation |
+| Java 17 | Application development |
+| Apache Maven | Build automation and version management |
+| Docker | Containerization |
+| Docker Hub | Container registry |
+| SSH | Secure remote deployment |
 
 ---
 
@@ -473,54 +518,40 @@ jenkins-multibranch-pipeline/
 │
 ├── Jenkinsfile
 ├── Dockerfile
+├── pom.xml
 │
 ├── docs/
 │   ├── setup.md
-│   ├── commands.md
 │   ├── credentials.md
-│   ├── webhooks.md
-│   ├── versioning.md
+│   ├── commands.md
 │   ├── troubleshooting.md
+│   ├── versioning.md
+│   ├── webhooks.md
 │   └── lessons-learned.md
 │
-├── media/
-│   ├── screenshots/
-│   ├── diagrams/
-│   └── gifs/
-│
-└── videos/
-    └── video-script.md
+└── media/
+    └── screenshots/
 ```
 
 ---
 
-## Implementation
+## Setup & Configuration
 
-**Repository Preparation:** configured the source repository and Jenkinsfile.
+This pipeline deploys to a separate server over SSH and uses three Jenkins credentials (Docker Hub, deploy-server SSH key, GitHub PAT).
 
-**Multibranch Configuration:** configured Jenkins to discover repository branches automatically.
+* **[docs/setup.md](docs/setup.md)** documents provisioning the deployment server, installing Docker, and generating and authorizing a dedicated Jenkins SSH key.
+* **[docs/credentials.md](docs/credentials.md)** documents adding the Docker Hub, SSH, and GitHub PAT credentials to Jenkins, and matching their IDs to the Jenkinsfile.
+* **[docs/commands.md](docs/commands.md)** is a reference of every command the pipeline runs and the manual commands used while building it.
+* **[docs/troubleshooting.md](docs/troubleshooting.md)** covers common failure modes by stage, with likely causes and how to check them.
+* **[docs/versioning.md](docs/versioning.md)** explains the versioning approach in depth: why patch-only automation, why not SNAPSHOT, and how the Docker tag stays aligned with the application version.
+* **[docs/webhooks.md](docs/webhooks.md)** covers why a webhook was chosen over polling, how it's wired up, and the security considerations around exposing a webhook endpoint.
+* **[docs/lessons-learned.md](docs/lessons-learned.md)** reflects on the engineering decisions behind the recursive-trigger protection, credential handling, and the build/deploy server separation.
 
-**Branch Logic:** implemented branch-aware pipeline behavior for `main`, `develop`, and `feature/*`.
-
-**Credentials:** configured Jenkins credentials required by the pipeline.
-
-**Webhook:** configured repository events to notify Jenkins.
-
-**Application Versioning:** implemented version incrementing, both locally and from within the pipeline.
-
-**Docker Image:** aligned the container image tag with the application version.
-
-**Git Version Commit:** enabled Jenkins to commit the version update back to the repository.
-
-**Trigger Protection:** implemented a mechanism to prevent Jenkins-generated commits from recursively starting another pipeline execution.
-
-**Validation:** ran the complete workflow end to end and confirmed each stage behaves as designed.
+Every environment-specific value lives in the `environment {}` block at the top of the Jenkinsfile, nothing is hard-coded elsewhere in the pipeline.
 
 ---
 
 ## Security Considerations
-
-This project involves credentials and automated write access to Git, making security particularly important.
 
 * Never commit secrets.
 * Never place passwords directly inside Jenkinsfiles.
@@ -538,9 +569,11 @@ This project involves credentials and automated write access to Git, making secu
 
 ## Troubleshooting
 
+Real-world challenges encountered during implementation, documented as they came up.
+
 **Branch not discovered.** Check repository configuration, branch discovery strategy, repository permissions, Jenkins credentials, and Jenkins indexing logs.
 
-**Webhook does not trigger Jenkins.** Check webhook configuration, target URL, Jenkins accessibility, event type, authentication/secret configuration, and Jenkins logs.
+**Webhook does not trigger Jenkins.** Check webhook configuration, target URL, Jenkins accessibility, event type, authentication and secret configuration, and Jenkins logs.
 
 **Credential authentication fails.** Check the credential ID, credential type, permissions, repository access, and credential scope.
 
@@ -548,7 +581,8 @@ This project involves credentials and automated write access to Git, making secu
 
 **Jenkins commit triggers another pipeline.** Check commit identification, webhook behavior, trigger filtering, and pipeline conditions.
 
-Detailed investigation procedures are documented separately in `docs/troubleshooting.md`.
+![Troubleshooting Example](./media/screenshots/troubleshooting-example.png)
+*A real failure encountered during implementation, and the fix applied.*
 
 ---
 
@@ -570,7 +604,7 @@ Detailed investigation procedures are documented separately in `docs/troubleshoo
 
 This project reinforced how Multibranch discovery behaves in practice, how to design pipeline logic that adapts cleanly per branch, secure credential handling within Jenkins, webhook configuration and troubleshooting, and the discipline required to automate version commits without creating an infinite build loop.
 
-The recursive-trigger problem in particular was the most instructive part of the project: solving it required treating Jenkins' own commits as first-class events to detect and filter, not just an edge case to patch around. Full details are documented in `docs/lessons-learned.md`.
+The recursive-trigger problem in particular was the most instructive part of the project: solving it required treating Jenkins' own commits as first-class events to detect and filter, not just an edge case to patch around.
 
 ---
 
@@ -594,7 +628,7 @@ The recursive-trigger problem in particular was the most instructive part of the
 
 ## Related Projects
 
-**Jenkins CI/CD Pipeline:** [jenkins-cicd-pipeline](https://github.com/Chukwuemeka-Peter-Eze/jenkins-cicd-pipeline)
+**Jenkins CI Pipeline:** [jenkins-ci-pipeline](https://github.com/Chukwuemeka-Peter-Eze/jenkins-ci-pipeline)
 
 **Jenkins Shared Library:** [jenkins-shared-library](https://github.com/Chukwuemeka-Peter-Eze/jenkins-shared-library)
 
@@ -604,7 +638,6 @@ The recursive-trigger problem in particular was the most instructive part of the
 
 **GitHub:** https://github.com/Chukwuemeka-Peter-Eze
 **LinkedIn:** https://www.linkedin.com/in/chukwuemekapetereze/
-**Portfolio:** https://www.chukwuemekapetereze.online
 
 If you found this repository useful, consider giving it a star.
 
